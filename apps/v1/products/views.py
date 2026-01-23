@@ -645,7 +645,53 @@ class AddFavouriteAPIView(APIView):
 
 @extend_schema(
     tags=['Избранное'],
-    summary='Удалить товар из избранного',
+    summary='Получить список избранных товаров',
+    description='Возвращает список всех избранных товаров для текущего пользователя. Требуется аутентификация.',
+    responses={200: ProductSerializer(many=True)}
+)
+class FavouriteListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """Get all favourite products for current user"""
+        # Get products that are in user's favourites
+        products = Product.objects.filter(
+            favourites__user=request.user,
+            is_active=True
+        ).prefetch_related(
+            'images',
+            'meterages',
+            'sub_category__parent'
+        ).order_by('-favourites__created_at').distinct()
+        
+        # Pagination
+        paginator = ProductPagination()
+        paginated_products = paginator.paginate_queryset(products, request)
+        
+        serializer = ProductSerializer(paginated_products, many=True, context={'request': request})
+        return paginator.get_paginated_response(serializer.data)
+
+
+@extend_schema(
+    tags=['Избранное'],
+    summary='Добавить товар в избранное',
+    description='Добавляет товар в избранное для текущего пользователя. Требуется аутентификация.',
+    responses={
+        200: OpenApiTypes.OBJECT,
+        201: OpenApiTypes.OBJECT,
+        404: OpenApiTypes.OBJECT
+    },
+    parameters=[
+        OpenApiParameter(
+            name='product_id',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.PATH,
+            description='ID товара для добавления в избранное',
+            required=True
+        )
+    ]
+)
+class AddFavouriteAPIView(APIView):
     description='Удаляет товар из избранного для текущего пользователя. Требуется аутентификация.',
     responses={
         200: OpenApiTypes.OBJECT,
