@@ -692,6 +692,40 @@ class FavouriteListAPIView(APIView):
     ]
 )
 class AddFavouriteAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, product_id):
+        """Add product to favourites"""
+        try:
+            product = Product.objects.get(id=product_id, is_active=True)
+        except Product.DoesNotExist:
+            return Response({
+                'error': 'Товар не найден'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if already in favourites
+        favourite, created = Favourite.objects.get_or_create(
+            user=request.user,
+            product=product
+        )
+        
+        if created:
+            return Response({
+                'message': 'Товар успешно добавлен в избранное',
+                'product_id': product.id,
+                'product_name': product.name
+            }, status=status.HTTP_201_CREATED)
+        else:
+            return Response({
+                'message': 'Товар уже в избранном',
+                'product_id': product.id,
+                'product_name': product.name
+            }, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=['Избранное'],
+    summary='Удалить товар из избранного',
     description='Удаляет товар из избранного для текущего пользователя. Требуется аутентификация.',
     responses={
         200: OpenApiTypes.OBJECT,
