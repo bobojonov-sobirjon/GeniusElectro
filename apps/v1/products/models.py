@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
+from apps.v1.accounts.models import CustomUser
 
 
 class Category(models.Model):
@@ -59,6 +60,14 @@ class SubCategory(Category):
 
 
 class Product(models.Model):
+    user = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='products',
+        verbose_name='Поставщик',
+        null=True,
+        blank=True
+    )
     sub_category = models.ForeignKey(
         Category,
         on_delete=models.CASCADE,

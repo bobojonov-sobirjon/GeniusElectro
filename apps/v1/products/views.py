@@ -3,12 +3,16 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import models
 from django.db.models import Q, Min, Max
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
-from .models import Category, Product, Favourite
-from .serializers import MainCategorySerializer, ProductSerializer
+from .models import Category, Product, Favourite, ProductImage, ProductMeterage
+from .serializers import (
+    MainCategorySerializer, ProductSerializer,
+    SupplierProductCreateUpdateSerializer
+)
 
 
 class ProductPagination(PageNumberPagination):
@@ -762,4 +766,198 @@ class RemoveFavouriteAPIView(APIView):
         except Favourite.DoesNotExist:
             return Response({
                 'error': 'Товар не найден в избранном'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+
+# Supplier Product API Views
+@extend_schema(
+    tags=['Товары (Поставщик)'],
+    summary='Получить список товаров поставщика',
+    description='Возвращает список всех товаров, принадлежащих текущему аутентифицированному поставщику. Требуется аутентификация.',
+    responses={200: ProductSerializer(many=True)}
+)
+class SupplierProductListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = ProductPagination
+    
+    def get(self, request):
+        """Get all products for current supplier user"""
+        products = Product.objects.filter(
+            user=request.user
+        ).select_related(
+            'sub_category', 'sub_category__parent'
+        ).prefetch_related('images', 'meterages').order_by('-created_at')
+        
+        # Pagination
+        paginator = self.pagination_class()
+        paginated_products = paginator.paginate_queryset(products, request)
+        
+        serializer = ProductSerializer(paginated_products, many=True, context={'request': request})
+        return paginator.get_paginated_response(serializer.data)
+
+
+@extend_schema(
+    tags=['Товары (Поставщик)'],
+    summary='Получить товар по ID (поставщик)',
+    description='Возвращает информацию о товаре по его ID. Товар должен принадлежать текущему аутентифицированному поставщику. Требуется аутентификация.',
+    responses={200: ProductSerializer, 404: OpenApiTypes.OBJECT},
+    parameters=[
+        OpenApiParameter(
+            name='id',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.PATH,
+            description='ID товара',
+            required=True
+        )
+    ]
+)
+class SupplierProductDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, id):
+        """Get product by ID for supplier"""
+        try:
+            product = Product.objects.select_related(
+                'sub_category', 'sub_category__parent'
+            ).prefetch_related('images', 'meterages').get(id=id, user=request.user)
+            
+            serializer = ProductSerializer(product, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Product.DoesNotExist:
+            return Response({
+                'error': 'Товар не найден'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+
+class SupplierProductCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser] # JSONParserni olib tashladik, chunki multipartda rasm kelyapti
+
+    @extend_schema(
+        tags=['Товары (Поставщик)'],
+        summary='Создать товар',
+        description="""
+        ### Создание нового товара
+
+        Метод позволяет поставщику создать новый товар с изображениями и спецификациями метража.
+
+        **Тип запроса:** `multipart/form-data`
+
+        ---
+
+        ### **Основные поля (Body):**
+        * **sub_category** (integer): ID подкатегории (обязательно). Должна быть конечной категорией (не родителем).
+        * **name** (string): Название товара.
+        * **sku** (string): Уникальный артикул. Если SKU уже есть в базе, вернет 400 ошибку.
+        * **price_per_meter** (decimal): Цена за 1 метр.
+        * **stock** (integer): Общее количество на складе.
+
+        ### **Работа с изображениями (`images`):**
+        * Передавайте файлы в поле `images`
+        * Чтобы загрузить несколько фото — отправляйте несколько `images`
+        * Первое изображение → `is_main=True`
+
+        ### **Работа с метражами (`meterages`):**
+        * JSON-строка или массив
+        * Формат: `[{"value": 10, "is_active": true}, {"value": 25}]`
+        * `is_active` по умолчанию true
+
+        ### **Пример FormData**
+        | Key | Value | Type |
+        | --- | --- | --- |
+        | name | Кабель ВВГ | Text |
+        | images | file1.jpg | File |
+        | images | file2.jpg | File |
+        | meterages | [{"value":50}] | Text |
+    """,
+    request=SupplierProductCreateUpdateSerializer,
+    responses={201: ProductSerializer}
+    )
+    def post(self, request):
+        serializer = SupplierProductCreateUpdateSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            product = serializer.save()
+            return Response(ProductSerializer(product, context={'request': request}).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class SupplierProductUpdateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        tags=['Товары (Поставщик)'],
+        summary='Товар редактировать',
+        description="""
+### Обновление товара
+
+Позволяет изменить данные существующего товара. Доступно только владельцу товара.
+
+**Важные особенности обновления:**
+
+1.  **Обновление изображений:**
+    * Если вы передаете поле `images`, **все старые фотографии товара удаляются** и заменяются новыми.
+    * Если поле `images` не передано, фотографии остаются прежними.
+
+2.  **Обновление метражей:**
+    * Передача списка `meterages` полностью перезаписывает существующие метражи (старые удаляются).
+
+3.  **Partial Update (Частичное обновление):**
+    * Метод поддерживает `partial=True`, поэтому вы можете отправлять только те поля, которые хотите изменить (например, только `price_per_meter` или только `stock`).
+
+**Параметры пути:**
+* `id` (integer): Индификатор товара.
+
+**Ошибки:**
+* `403 Forbidden`: Если товар принадлежит другому поставщику.
+* `404 Not Found`: Если товар с таким ID не найден.
+""",
+        request=SupplierProductCreateUpdateSerializer,
+        responses={200: ProductSerializer}
+    )
+    def put(self, request, id):
+        product = get_object_or_404(Product, id=id, user=request.user)
+        # partial=True muhim, chunki PUT so'rovda hamma maydonni yubormasligimiz mumkin
+        serializer = SupplierProductCreateUpdateSerializer(product, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            product = serializer.save()
+            return Response(ProductSerializer(product, context={'request': request}).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(
+    tags=['Товары (Поставщик)'],
+    summary='Удалить товар',
+    description='Удаляет товар по его ID. Товар должен принадлежать текущему аутентифицированному поставщику. Требуется аутентификация.',
+    responses={
+        200: OpenApiTypes.OBJECT,
+        404: OpenApiTypes.OBJECT
+    },
+    parameters=[
+        OpenApiParameter(
+            name='id',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.PATH,
+            description='ID товара для удаления',
+            required=True
+        )
+    ]
+)
+class SupplierProductDeleteAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, id):
+        """Delete product for supplier"""
+        try:
+            product = Product.objects.get(id=id, user=request.user)
+            product_name = product.name
+            product.delete()
+            
+            return Response({
+                'message': 'Товар успешно удален',
+                'product_id': id,
+                'product_name': product_name
+            }, status=status.HTTP_200_OK)
+        except Product.DoesNotExist:
+            return Response({
+                'error': 'Товар не найден'
             }, status=status.HTTP_404_NOT_FOUND)

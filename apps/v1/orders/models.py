@@ -35,6 +35,13 @@ class PaymentMethod(models.Model):
         return self.name
 
 
+class OrderStatusType(models.TextChoices):
+    """Choices for order status"""
+    OZHIDANIE = 'Ожидание', 'Ожидание'
+    OBRABATYVAETSYA = 'Обрабатывается', 'Обрабатывается'
+    OTPRAVLEN = 'Отправлен', 'Отправлен'
+
+
 class Order(models.Model):
     """Заказ"""
     user = models.ForeignKey(
@@ -84,7 +91,7 @@ class Order(models.Model):
     class Meta:
         verbose_name = '03. Заказ'
         verbose_name_plural = '03. Заказы'
-        ordering = ['-created_at']
+        ordering = ['-created_at', '-id']  # Yangi orderlar boshida
 
     def __str__(self):
         return f"Заказ #{self.id} - {self.user.email} ({self.total_price} руб.)"
@@ -111,6 +118,12 @@ class OrderProduct(models.Model):
         verbose_name='Цена за единицу',
         null=False,
         blank=False
+    )
+    status = models.CharField(
+        max_length=50,
+        choices=OrderStatusType.choices,
+        default=OrderStatusType.OZHIDANIE,
+        verbose_name='Статус товара в заказе'
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
 
