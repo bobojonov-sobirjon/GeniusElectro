@@ -1,8 +1,29 @@
+import logging
+
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 from .models import EmailVerificationToken, PasswordResetToken
+
+logger = logging.getLogger(__name__)
+
+
+def _email_debug_context():
+    """
+    Safe email configuration snapshot for logs (no passwords/tokens).
+    """
+    return {
+        "EMAIL_BACKEND": getattr(settings, "EMAIL_BACKEND", None),
+        "EMAIL_HOST": getattr(settings, "EMAIL_HOST", None),
+        "EMAIL_PORT": getattr(settings, "EMAIL_PORT", None),
+        "EMAIL_USE_TLS": getattr(settings, "EMAIL_USE_TLS", None),
+        "EMAIL_USE_SSL": getattr(settings, "EMAIL_USE_SSL", None),
+        "EMAIL_HOST_USER": getattr(settings, "EMAIL_HOST_USER", None),
+        "DEFAULT_FROM_EMAIL": getattr(settings, "DEFAULT_FROM_EMAIL", None),
+        "FRONTEND_URL": getattr(settings, "FRONTEND_URL", None),
+        "DEBUG": getattr(settings, "DEBUG", None),
+    }
 
 
 def send_verification_email(user, token):
@@ -22,14 +43,29 @@ def send_verification_email(user, token):
 С уважением,
 Команда GeniusElectro
 """
-    
-    send_mail(
-        subject=subject,
-        message=message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
-    )
+
+    try:
+        sent_count = send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+        logger.info(
+            "Verification email sent_count=%s recipient=%s ctx=%s",
+            sent_count,
+            user.email,
+            _email_debug_context(),
+        )
+        return sent_count
+    except Exception:
+        logger.exception(
+            "Verification email send failed recipient=%s ctx=%s",
+            getattr(user, "email", None),
+            _email_debug_context(),
+        )
+        raise
 
 
 def send_password_reset_email(user, token):
@@ -51,14 +87,29 @@ def send_password_reset_email(user, token):
 С уважением,
 Команда GeniusElectro
 """
-    
-    send_mail(
-        subject=subject,
-        message=message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
-    )
+
+    try:
+        sent_count = send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+        logger.info(
+            "Password reset email sent_count=%s recipient=%s ctx=%s",
+            sent_count,
+            user.email,
+            _email_debug_context(),
+        )
+        return sent_count
+    except Exception:
+        logger.exception(
+            "Password reset email send failed recipient=%s ctx=%s",
+            getattr(user, "email", None),
+            _email_debug_context(),
+        )
+        raise
 
 
 def create_email_verification_token(user):
