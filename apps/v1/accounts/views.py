@@ -153,6 +153,9 @@ class LoginAPIView(APIView):
 
             refresh = RefreshToken.for_user(user)
 
+            # Get user groups
+            groups = [{'id': group.id, 'name': group.name} for group in user.groups.all()]
+            
             return Response({
 
                 'message': 'Вход выполнен успешно',
@@ -169,7 +172,9 @@ class LoginAPIView(APIView):
 
                     'phone': user.phone,
 
-                    'is_email_verified': user.is_email_verified
+                    'is_email_verified': user.is_email_verified,
+
+                    'groups': groups
 
                 },
 
@@ -205,7 +210,7 @@ class UserDetailAPIView(APIView):
 
     def get(self, request):
 
-        serializer = UserDetailSerializer(request.user)
+        serializer = UserDetailSerializer(request.user, context={'request': request})
 
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -229,7 +234,7 @@ class UserDetailAPIView(APIView):
 
             request.user.refresh_from_db()
 
-            user_serializer = UserDetailSerializer(request.user)
+            user_serializer = UserDetailSerializer(request.user, context={'request': request})
 
             return Response({
 

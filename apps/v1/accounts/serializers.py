@@ -155,16 +155,21 @@ class LoginSerializer(serializers.Serializer):
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
-
+    groups = serializers.SerializerMethodField()
+    
     class Meta:
 
         model = CustomUser
 
         fields = ('id', 'email', 'first_name', 'last_name', 'phone', 'is_email_verified', 'created_at', 'updated_at',
 
-                  'city', 'street', 'flat', 'house', 'index')
+                  'city', 'street', 'flat', 'house', 'index', 'groups')
 
         read_only_fields = ('id', 'email', 'is_email_verified', 'created_at', 'updated_at')
+    
+    def get_groups(self, obj):
+        """Get user groups"""
+        return [{'id': group.id, 'name': group.name} for group in obj.groups.all()]
 
 
 
