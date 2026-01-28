@@ -2,6 +2,8 @@ from rest_framework import serializers
 
 from django.contrib.auth import authenticate
 
+from django.contrib.auth.models import Group
+
 from django.contrib.auth.password_validation import validate_password
 
 from .models import CustomUser, Company, CompanyDocument, LegalFormType, ActsOnBasisType
@@ -81,6 +83,10 @@ class RegisterSerializer(serializers.ModelSerializer):
             is_email_verified=False
 
         )
+
+        # Add user to Buyer group (create group if missing)
+        buyer_group, _ = Group.objects.get_or_create(name='Buyer')
+        user.groups.add(buyer_group)
 
         return user
 
@@ -342,6 +348,10 @@ class RegisterSupplierSerializer(serializers.Serializer):
             is_email_verified=False
 
         )
+
+        # Add user to Supplier group (create group if missing)
+        supplier_group, _ = Group.objects.get_or_create(name='Supplier')
+        user.groups.add(supplier_group)
 
         
 
