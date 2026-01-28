@@ -94,6 +94,13 @@ class BuyerUserAdmin(BaseUserAdmin):
 
     readonly_fields = ('created_at', 'updated_at', 'date_joined', 'last_login')
 
+    def get_queryset(self, request):
+        """
+        Показывать здесь только пользователей, которые входят в группу 'Buyer'.
+        """
+        qs = super().get_queryset(request)
+        return qs.filter(groups__name='Buyer').distinct()
+
 
 
 
@@ -146,6 +153,13 @@ class SupplierUserAdmin(BaseUserAdmin):
 
     readonly_fields = ('created_at', 'updated_at', 'date_joined', 'last_login')
 
+    def get_queryset(self, request):
+        """
+        Показывать здесь только пользователей, которые входят в группу 'Supplier'.
+        """
+        qs = super().get_queryset(request)
+        return qs.filter(groups__name='Supplier').distinct()
+
 
 
 
@@ -187,11 +201,9 @@ class CompanyDocumentInline(admin.TabularInline):
     """Inline admin for Company documents"""
 
     model = CompanyDocument
-
-    extra = 1
-
-    fields = ('document_type', 'file', 'created_at')
-
+    extra = 0
+    # Use real file fields from CompanyDocument model
+    fields = ('tin_certificate', 'ogrn_certificate', 'charter', 'director_appointment', 'created_at')
     readonly_fields = ('created_at',)
 
 

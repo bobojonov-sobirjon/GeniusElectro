@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Upload company documents</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0b0b0b;
+      color: #f5f5f5;
+      padding: 24px;
+    }
+    .card {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #16181d;
+      border-radius: 12px;
+      padding: 24px 28px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+      border: 1px solid #2a2f3a;
+    }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      font-size: 22px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px 24px;
+      margin-bottom: 16px;
+    }
+    label {
+      font-size: 13px;
+      color: #aeb4c4;
+      display: block;
+      margin-bottom: 4px;
+    }
+    input[type="file"] {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #303644;
+      background: #111319;
+      color: #e0e4f0;
+      font-size: 13px;
+    }
+    button {
+      margin-top: 8px;
+      padding: 10px 18px;
+      border-radius: 999px;
+      border: none;
+      background: linear-gradient(135deg, #f5b051, #f0a020);
+      color: #161616;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    pre {
+      margin-top: 20px;
+      padding: 12px 14px;
+      background: #050608;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #9cf59c;
+      max-height: 320px;
+      overflow: auto;
+      border: 1px solid #273038;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 18px;
+    }
+    .sub {
+      font-size: 13px;
+      color: #8d93a4;
+      max-width: 520px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1>Загрузка документов компании</h1>
+      <small style="color:#7e8597">POST /api/v1/accounts/companies/5/documents/</small>
+    </div>
+    <p class="sub">
+      Выберите файлы и нажмите «Отправить». Запрос уйдёт на
+      <code>https://api.electro.motorsdream.ru/api/v1/accounts/companies/5/documents/</code>
+      c заголовком <code>Authorization: Bearer &lt;token&gt;</code>.
+      Ответ и возможные ошибки выводятся ниже в консоль.
+    </p>
+
+    <form id="docs-form">
+      <div class="row">
+        <div>
+          <label for="tin_certificate">ИНН (tin_certificate)</label>
+          <input id="tin_certificate" type="file" name="tin_certificate" />
+        </div>
+        <div>
+          <label for="ogrn_certificate">ОГРН (ogrn_certificate)</label>
+          <input id="ogrn_certificate" type="file" name="ogrn_certificate" />
+        </div>
+        <div>
+          <label for="charter">Устав компании (charter)</label>
+          <input id="charter" type="file" name="charter" />
+        </div>
+        <div>
+          <label for="director_appointment">Приказ о назначении директора (director_appointment)</label>
+          <input id="director_appointment" type="file" name="director_appointment" />
+        </div>
+      </div>
+
+      <button type="submit" id="submit-btn">Отправить</button>
+    </form>
+
+    <pre id="log"></pre>
+  </div>
+
+  <script>
+    const TOKEN =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzcwMjE2MjkxLCJpYXQiOjE3Njk2MTE0OTEsImp0aSI6IjM4YjI0Y2ZlZWY3NDRiODBiNDkxMWJhNDIxZWY5NWE5IiwidXNlcl9pZCI6IjE0In0.UBTpk-qYMOQx3xKjLI13cUu78IIQEMmTorVrgIqAR-4';
+    const URL =
+      'https://api.electro.motorsdream.ru/api/v1/accounts/companies/8/documents/';
+
+    const form = document.getElementById('docs-form');
+    const logEl = document.getElementById('log');
+    const submitBtn = document.getElementById('submit-btn');
+
+    function log(...args) {
+      console.log(...args);
+      const line = args
+        .map((a) =>
+          typeof a === 'string'
+            ? a
+            : JSON.stringify(a, null, 2)
+        )
+        .join(' ');
+      logEl.textContent += line + '\n';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      logEl.textContent = '';
+      submitBtn.disabled = true;
+
+      const formData = new FormData(form);
+
+      log('➡️ Sending request to', URL);
+
+      // Debug: показать какие поля реально уходят
+      for (const [key, value] of formData.entries()) {
+        log('formData field:', key, value && value.name ? value.name : String(value));
+      }
+
+      try {
+        const response = await fetch(URL, {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer ' + TOKEN
+            // НЕ добавляем Content-Type — браузер сам поставит multipart/form-data c boundary
+          },
+          body: formData
+        });
+
+        log('⬅️ Status:', response.status, response.statusText);
+
+        const contentType = response.headers.get('content-type') || '';
+        log('Content-Type:', contentType);
+
+        if (contentType.includes('application/json')) {
+          const data = await response.json();
+          log('JSON response:', data);
+        } else {
+          const text = await response.text();
+          log('Text response:', text);
+        }
+      } catch (err) {
+        log('❌ Fetch error:', String(err));
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
+
